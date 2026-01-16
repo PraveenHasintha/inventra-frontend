@@ -10,12 +10,24 @@ export default function Home() {
         Base build is ready. Next we add Products, Stock, Sales (POS), PDFs, Offline mode.
       </p>
 
-      <div className="flex gap-3">
-        <Link className="rounded bg-black px-4 py-2 text-white" href="/login">
+      <div className="flex flex-wrap gap-2">
+        <Link className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50" href="/login">
           Login
         </Link>
-        <Link className="rounded border px-4 py-2" href="/dashboard">
+        <Link className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50" href="/dashboard">
           Dashboard
+        </Link>
+        <Link className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50" href="/products">
+          Products
+        </Link>
+        <Link className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50" href="/categories">
+          Categories
+        </Link>
+        <Link className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50" href="/inventory">
+          Inventory
+        </Link>
+        <Link className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50" href="/branches">
+          Branches
         </Link>
       </div>
     </main>
