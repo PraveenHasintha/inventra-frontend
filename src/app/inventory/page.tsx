@@ -28,24 +28,31 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<StockItem[]>([]);
 
-  // Manager actions
-  const [productId, setProductId] = useState("");
+  // Receive
+  const [receiveProductId, setReceiveProductId] = useState("");
   const [receiveQty, setReceiveQty] = useState<number>(1);
+  const [receiveNote, setReceiveNote] = useState("");
+
+  // Adjust
+  const [adjustProductId, setAdjustProductId] = useState("");
   const [adjustQty, setAdjustQty] = useState<number>(0);
-  const [note, setNote] = useState("");
+  const [adjustNote, setAdjustNote] = useState("");
+
+  // Sale
+  const [saleProductId, setSaleProductId] = useState("");
+  const [saleQty, setSaleQty] = useState<number>(1);
+  const [saleNote, setSaleNote] = useState("");
+
+  // Damage
+  const [damageProductId, setDamageProductId] = useState("");
+  const [damageQty, setDamageQty] = useState<number>(1);
+  const [damageNote, setDamageNote] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const activeBranches = useMemo(
-    () => branches.filter((b) => b.isActive),
-    [branches]
-  );
-
-  const activeProducts = useMemo(
-    () => products.filter((p) => p.isActive),
-    [products]
-  );
+  const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches]);
+  const activeProducts = useMemo(() => products.filter((p) => p.isActive), [products]);
 
   async function loadBase() {
     setError(null);
@@ -57,11 +64,8 @@ export default function InventoryPage() {
     setBranches(bRes.branches);
 
     const pRes = await api<{ products: any[] }>("/products");
-    setProducts(
-      pRes.products.map((p) => ({ id: p.id, name: p.name, sku: p.sku, isActive: p.isActive }))
-    );
+    setProducts(pRes.products.map((p) => ({ id: p.id, name: p.name, sku: p.sku, isActive: p.isActive })));
 
-    // auto select first branch
     if (!branchId && bRes.branches.length > 0) {
       setBranchId(bRes.branches[0].id);
     }
@@ -86,70 +90,109 @@ export default function InventoryPage() {
       return;
     }
 
+    setLoading(true);
     loadBase()
       .catch((e: any) => setError(e.message || "Failed to load"))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // when branchId changes, reload inventory
   useEffect(() => {
     if (!branchId) return;
     loadInventory(branchId).catch((e: any) => setError(e.message || "Failed to load inventory"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId]);
 
-  async function onReceive(e: React.FormEvent) {
-    e.preventDefault();
-    if (!branchId || !productId) return;
-
+  async function runAction(fn: () => Promise<void>) {
     setLoading(true);
     setError(null);
     try {
-      await api("/inventory/receive", {
-        method: "POST",
-        body: JSON.stringify({
-          branchId,
-          productId,
-          quantity: Number(receiveQty),
-          note: note || undefined,
-        }),
-      });
-
-      setReceiveQty(1);
-      setNote("");
+      await fn();
       await loadInventory(branchId);
     } catch (e: any) {
-      setError(e.message || "Receive failed");
+      setError(e.message || "Action failed");
     } finally {
       setLoading(false);
     }
   }
 
+  async function onReceive(e: React.FormEvent) {
+    e.preventDefault();
+    if (!branchId || !receiveProductId) return;
+
+    await runAction(async () => {
+      await api("/inventory/receive", {
+        method: "POST",
+        body: JSON.stringify({
+          branchId,
+          productId: receiveProductId,
+          quantity: Number(receiveQty),
+          note: receiveNote || undefined,
+        }),
+      });
+
+      setReceiveQty(1);
+      setReceiveNote("");
+    });
+  }
+
   async function onAdjust(e: React.FormEvent) {
     e.preventDefault();
-    if (!branchId || !productId) return;
+    if (!branchId || !adjustProductId) return;
 
-    setLoading(true);
-    setError(null);
-    try {
+    await runAction(async () => {
       await api("/inventory/adjust", {
         method: "POST",
         body: JSON.stringify({
           branchId,
-          productId,
+          productId: adjustProductId,
           newQuantity: Number(adjustQty),
-          note: note || "Manual adjustment",
+          note: adjustNote || "Manual adjustment",
         }),
       });
 
-      setNote("");
-      await loadInventory(branchId);
-    } catch (e: any) {
-      setError(e.message || "Adjust failed");
-    } finally {
-      setLoading(false);
-    }
+      setAdjustNote("");
+    });
+  }
+
+  async function onSale(e: React.FormEvent) {
+    e.preventDefault();
+    if (!branchId || !saleProductId) return;
+
+    await runAction(async () => {
+      await api("/inventory/sale", {
+        method: "POST",
+        body: JSON.stringify({
+          branchId,
+          productId: saleProductId,
+          quantity: Number(saleQty),
+          note: saleNote || "Sale",
+        }),
+      });
+
+      setSaleQty(1);
+      setSaleNote("");
+    });
+  }
+
+  async function onDamage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!branchId || !damageProductId) return;
+
+    await runAction(async () => {
+      await api("/inventory/damage", {
+        method: "POST",
+        body: JSON.stringify({
+          branchId,
+          productId: damageProductId,
+          quantity: Number(damageQty),
+          note: damageNote || "Damaged",
+        }),
+      });
+
+      setDamageQty(1);
+      setDamageNote("");
+    });
   }
 
   if (!me) return <main className="rounded bg-white p-6 shadow">Loading...</main>;
@@ -159,8 +202,12 @@ export default function InventoryPage() {
       <div className="flex items-center justify-between rounded bg-white p-6 shadow">
         <h2 className="text-xl font-semibold">Inventory</h2>
         <div className="flex gap-2">
-          <Link className="rounded border px-3 py-1 text-sm" href="/products">Products</Link>
-          <Link className="rounded border px-3 py-1 text-sm" href="/dashboard">Dashboard</Link>
+          <Link className="rounded border px-3 py-1 text-sm" href="/products">
+            Products
+          </Link>
+          <Link className="rounded border px-3 py-1 text-sm" href="/dashboard">
+            Dashboard
+          </Link>
         </div>
       </div>
 
@@ -170,13 +217,11 @@ export default function InventoryPage() {
       <div className="grid gap-3 rounded bg-white p-6 shadow md:grid-cols-3">
         <div className="space-y-1">
           <label className="text-sm font-medium">Branch</label>
-          <select
-            className="w-full rounded border px-3 py-2"
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-          >
+          <select className="w-full rounded border px-3 py-2" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
             {activeBranches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
             ))}
           </select>
         </div>
@@ -204,6 +249,7 @@ export default function InventoryPage() {
       {/* Manager actions */}
       {me.role === "MANAGER" && (
         <div className="grid gap-4 md:grid-cols-2">
+          {/* Receive */}
           <form onSubmit={onReceive} className="space-y-3 rounded bg-white p-6 shadow">
             <h3 className="font-semibold">Receive Stock</h3>
 
@@ -211,8 +257,8 @@ export default function InventoryPage() {
               <label className="text-sm font-medium">Product</label>
               <select
                 className="w-full rounded border px-3 py-2"
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
+                value={receiveProductId}
+                onChange={(e) => setReceiveProductId(e.target.value)}
                 required
               >
                 <option value="">Select product</option>
@@ -239,20 +285,21 @@ export default function InventoryPage() {
               <label className="text-sm font-medium">Note (optional)</label>
               <input
                 className="w-full rounded border px-3 py-2"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
+                value={receiveNote}
+                onChange={(e) => setReceiveNote(e.target.value)}
                 placeholder="e.g. Supplier delivery"
               />
             </div>
 
             <button
-              disabled={loading || !branchId || !productId}
+              disabled={loading || !branchId || !receiveProductId}
               className="rounded bg-black px-4 py-2 text-white disabled:opacity-60"
             >
               {loading ? "Saving..." : "Receive"}
             </button>
           </form>
 
+          {/* Adjust */}
           <form onSubmit={onAdjust} className="space-y-3 rounded bg-white p-6 shadow">
             <h3 className="font-semibold">Adjust Stock (Set exact qty)</h3>
 
@@ -260,8 +307,8 @@ export default function InventoryPage() {
               <label className="text-sm font-medium">Product</label>
               <select
                 className="w-full rounded border px-3 py-2"
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
+                value={adjustProductId}
+                onChange={(e) => setAdjustProductId(e.target.value)}
                 required
               >
                 <option value="">Select product</option>
@@ -288,17 +335,111 @@ export default function InventoryPage() {
               <label className="text-sm font-medium">Note (optional)</label>
               <input
                 className="w-full rounded border px-3 py-2"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
+                value={adjustNote}
+                onChange={(e) => setAdjustNote(e.target.value)}
                 placeholder="e.g. Stock count correction"
               />
             </div>
 
-            <button
-              disabled={loading || !branchId || !productId}
-              className="rounded border px-4 py-2 text-sm disabled:opacity-60"
-            >
+            <button disabled={loading || !branchId || !adjustProductId} className="rounded border px-4 py-2 text-sm disabled:opacity-60">
               {loading ? "Saving..." : "Adjust"}
+            </button>
+          </form>
+
+          {/* Sale */}
+          <form onSubmit={onSale} className="space-y-3 rounded bg-white p-6 shadow">
+            <h3 className="font-semibold">Sell Stock (Sale)</h3>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Product</label>
+              <select
+                className="w-full rounded border px-3 py-2"
+                value={saleProductId}
+                onChange={(e) => setSaleProductId(e.target.value)}
+                required
+              >
+                <option value="">Select product</option>
+                {activeProducts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.sku})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Quantity (-)</label>
+              <input
+                type="number"
+                min={1}
+                className="w-full rounded border px-3 py-2"
+                value={saleQty}
+                onChange={(e) => setSaleQty(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Note (optional)</label>
+              <input
+                className="w-full rounded border px-3 py-2"
+                value={saleNote}
+                onChange={(e) => setSaleNote(e.target.value)}
+                placeholder="e.g. Invoice #1001"
+              />
+            </div>
+
+            <button
+              disabled={loading || !branchId || !saleProductId}
+              className="rounded bg-black px-4 py-2 text-white disabled:opacity-60"
+            >
+              {loading ? "Saving..." : "Sell"}
+            </button>
+          </form>
+
+          {/* Damage */}
+          <form onSubmit={onDamage} className="space-y-3 rounded bg-white p-6 shadow">
+            <h3 className="font-semibold">Damage Stock</h3>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Product</label>
+              <select
+                className="w-full rounded border px-3 py-2"
+                value={damageProductId}
+                onChange={(e) => setDamageProductId(e.target.value)}
+                required
+              >
+                <option value="">Select product</option>
+                {activeProducts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.sku})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Quantity (-)</label>
+              <input
+                type="number"
+                min={1}
+                className="w-full rounded border px-3 py-2"
+                value={damageQty}
+                onChange={(e) => setDamageQty(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Note (optional)</label>
+              <input
+                className="w-full rounded border px-3 py-2"
+                value={damageNote}
+                onChange={(e) => setDamageNote(e.target.value)}
+                placeholder="e.g. Broken in transport"
+              />
+            </div>
+
+            <button disabled={loading || !branchId || !damageProductId} className="rounded border px-4 py-2 text-sm disabled:opacity-60">
+              {loading ? "Saving..." : "Mark Damaged"}
             </button>
           </form>
         </div>
