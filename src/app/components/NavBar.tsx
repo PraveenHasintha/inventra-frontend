@@ -1,73 +1,77 @@
 "use client";
 
-/**
- * Simple top navigation bar.
- * - Shows links to all main pages
- * - Shows Login if not logged in
- * - Shows Logout if logged in
- */
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { clearToken, getToken } from "@/lib/auth";
 
-function NavLink({
-  href,
-  label,
-}: {
-  href: string;
-  label: string;
-}) {
-  const pathname = usePathname();
-  const active = pathname === href;
-
-  return (
-    <Link
-      href={href}
-      className={[
-        "rounded px-3 py-2 text-sm",
-        active ? "bg-black text-white" : "border bg-white hover:bg-gray-50",
-      ].join(" ")}
-    >
-      {label}
-    </Link>
-  );
+function cx(...classes: Array<string | false | undefined | null>) {
+  return classes.filter(Boolean).join(" ");
 }
 
 export default function NavBar() {
+  const pathname = usePathname();
   const router = useRouter();
-  const token = getToken();
-  const loggedIn = Boolean(token);
 
-  function logout() {
+  const [mounted, setMounted] = useState(false);
+  const [hasToken, setHasToken] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    setHasToken(!!getToken());
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    setHasToken(!!getToken());
+  }, [mounted, pathname]);
+
+  const links = useMemo(
+    () => [
+      { href: "/", label: "Home" },
+      { href: "/dashboard", label: "Dashboard" },
+      { href: "/sales", label: "Sales" }, // ✅ user-friendly instead of POS
+      { href: "/products", label: "Products" },
+      { href: "/categories", label: "Categories" },
+      { href: "/inventory", label: "Inventory" },
+      { href: "/branches", label: "Branches" },
+    ],
+    []
+  );
+
+  function onLogout() {
     clearToken();
+    setHasToken(false);
     router.push("/login");
     router.refresh();
   }
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <NavLink href="/" label="Home" />
-        <NavLink href="/dashboard" label="Dashboard" />
-        <NavLink href="/products" label="Products" />
-        <NavLink href="/categories" label="Categories" />
-        <NavLink href="/inventory" label="Inventory" />
-        <NavLink href="/branches" label="Branches" />
-      </div>
+      <nav className="flex flex-wrap gap-2">
+        {links.map((l) => {
+          const active = pathname === l.href;
+          return (
+            <Link
+              key={l.href}
+              href={l.href}
+              className={cx("rounded border px-3 py-1 text-sm", active && "bg-black text-white")}
+            >
+              {l.label}
+            </Link>
+          );
+        })}
+      </nav>
 
       <div className="flex items-center gap-2">
-        {!loggedIn ? (
-          <Link
-            href="/login"
-            className="rounded bg-black px-3 py-2 text-sm text-white hover:opacity-90"
-          >
+        {!mounted ? (
+          <span className="rounded border px-3 py-1 text-sm text-gray-500">...</span>
+        ) : !hasToken ? (
+          <Link className="rounded border px-3 py-1 text-sm" href="/login">
             Login
           </Link>
         ) : (
-          <button
-            onClick={logout}
-            className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
-          >
+          <button className="rounded border px-3 py-1 text-sm" onClick={onLogout}>
             Logout
           </button>
         )}

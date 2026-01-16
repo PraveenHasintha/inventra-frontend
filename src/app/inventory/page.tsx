@@ -17,6 +17,39 @@ type StockItem = {
   product: { id: string; name: string; sku: string; sellingPrice: number; unit: string };
 };
 
+type StockTxn = {
+  id: string;
+  type: "RECEIVE" | "SALE" | "ADJUST" | "DAMAGE";
+  qtyChange: number;
+  note: string | null;
+  createdAt: string;
+  product: { id: string; name: string; sku: string };
+  branch: { id: string; name: string };
+  createdBy: { id: string; name: string; role: "MANAGER" | "EMPLOYEE" };
+};
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
+}
+
+function typeBadge(type: StockTxn["type"]) {
+  // simple text labels, no fancy color to keep consistent with your UI
+  switch (type) {
+    case "RECEIVE":
+      return "RECEIVE";
+    case "SALE":
+      return "SALE";
+    case "ADJUST":
+      return "ADJUST";
+    case "DAMAGE":
+      return "DAMAGE";
+    default:
+      return type;
+  }
+}
+
 export default function InventoryPage() {
   const router = useRouter();
 
@@ -47,6 +80,12 @@ export default function InventoryPage() {
   const [damageProductId, setDamageProductId] = useState("");
   const [damageQty, setDamageQty] = useState<number>(1);
   const [damageNote, setDamageNote] = useState("");
+
+  // History (txns)
+  const [historyProductId, setHistoryProductId] = useState<string>("");
+  const [txns, setTxns] = useState<StockTxn[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -83,6 +122,26 @@ export default function InventoryPage() {
     setItems(inv.items);
   }
 
+  async function loadHistory(selectedBranchId?: string) {
+    const bId = selectedBranchId || branchId;
+    if (!bId) return;
+
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const q = new URLSearchParams();
+      q.set("branchId", bId);
+      if (historyProductId) q.set("productId", historyProductId);
+
+      const res = await api<{ txns: StockTxn[] }>(`/inventory/txns?${q.toString()}`);
+      setTxns(res.txns);
+    } catch (e: any) {
+      setHistoryError(e.message || "Failed to load history");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   useEffect(() => {
     const token = getToken();
     if (!token) {
@@ -100,6 +159,8 @@ export default function InventoryPage() {
   useEffect(() => {
     if (!branchId) return;
     loadInventory(branchId).catch((e: any) => setError(e.message || "Failed to load inventory"));
+    // auto refresh history for the selected branch too
+    loadHistory(branchId).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId]);
 
@@ -109,6 +170,7 @@ export default function InventoryPage() {
     try {
       await fn();
       await loadInventory(branchId);
+      await loadHistory(branchId);
     } catch (e: any) {
       setError(e.message || "Action failed");
     } finally {
@@ -236,12 +298,19 @@ export default function InventoryPage() {
           />
         </div>
 
-        <div className="md:col-span-3">
+        <div className="md:col-span-3 flex gap-2">
           <button
             className="rounded border px-4 py-2 text-sm"
             onClick={() => loadInventory(branchId).catch((e: any) => setError(e.message || "Failed"))}
           >
             Apply
+          </button>
+
+          <button
+            className="rounded border px-4 py-2 text-sm"
+            onClick={() => loadHistory(branchId).catch(() => {})}
+          >
+            Refresh History
           </button>
         </div>
       </div>
@@ -291,10 +360,7 @@ export default function InventoryPage() {
               />
             </div>
 
-            <button
-              disabled={loading || !branchId || !receiveProductId}
-              className="rounded bg-black px-4 py-2 text-white disabled:opacity-60"
-            >
+            <button disabled={loading || !branchId || !receiveProductId} className="rounded bg-black px-4 py-2 text-white disabled:opacity-60">
               {loading ? "Saving..." : "Receive"}
             </button>
           </form>
@@ -369,13 +435,7 @@ export default function InventoryPage() {
 
             <div className="space-y-1">
               <label className="text-sm font-medium">Quantity (-)</label>
-              <input
-                type="number"
-                min={1}
-                className="w-full rounded border px-3 py-2"
-                value={saleQty}
-                onChange={(e) => setSaleQty(Number(e.target.value))}
-              />
+              <input type="number" min={1} className="w-full rounded border px-3 py-2" value={saleQty} onChange={(e) => setSaleQty(Number(e.target.value))} />
             </div>
 
             <div className="space-y-1">
@@ -388,10 +448,7 @@ export default function InventoryPage() {
               />
             </div>
 
-            <button
-              disabled={loading || !branchId || !saleProductId}
-              className="rounded bg-black px-4 py-2 text-white disabled:opacity-60"
-            >
+            <button disabled={loading || !branchId || !saleProductId} className="rounded bg-black px-4 py-2 text-white disabled:opacity-60">
               {loading ? "Saving..." : "Sell"}
             </button>
           </form>
@@ -419,13 +476,7 @@ export default function InventoryPage() {
 
             <div className="space-y-1">
               <label className="text-sm font-medium">Quantity (-)</label>
-              <input
-                type="number"
-                min={1}
-                className="w-full rounded border px-3 py-2"
-                value={damageQty}
-                onChange={(e) => setDamageQty(Number(e.target.value))}
-              />
+              <input type="number" min={1} className="w-full rounded border px-3 py-2" value={damageQty} onChange={(e) => setDamageQty(Number(e.target.value))} />
             </div>
 
             <div className="space-y-1">
@@ -463,6 +514,73 @@ export default function InventoryPage() {
                 </div>
                 <div className="text-gray-700">SKU: {it.product.sku}</div>
                 <div className="text-gray-600">Price: Rs {it.product.sellingPrice}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* History */}
+      <div className="rounded bg-white p-6 shadow">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-semibold">Stock History (Last 200)</h3>
+          <button className="rounded border px-4 py-2 text-sm" onClick={() => loadHistory(branchId)}>
+            {historyLoading ? "Loading..." : "Reload"}
+          </button>
+        </div>
+
+        <div className="mb-4 grid gap-3 md:grid-cols-2">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Filter by Product (optional)</label>
+            <select
+              className="w-full rounded border px-3 py-2"
+              value={historyProductId}
+              onChange={(e) => setHistoryProductId(e.target.value)}
+            >
+              <option value="">All products</option>
+              {activeProducts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.sku})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-end">
+            <button className="rounded border px-4 py-2 text-sm" onClick={() => loadHistory(branchId)}>
+              Apply Filter
+            </button>
+          </div>
+        </div>
+
+        {historyError && <div className="mb-3 rounded bg-red-50 p-3 text-sm text-red-700">{historyError}</div>}
+
+        {txns.length === 0 ? (
+          <p className="text-sm text-gray-600">No transactions yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {txns.map((t) => (
+              <div key={t.id} className="rounded border p-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded border px-2 py-0.5 text-xs">{typeBadge(t.type)}</span>
+                    <b>
+                      {t.product.name} ({t.product.sku})
+                    </b>
+                  </div>
+                  <div className="text-gray-700">
+                    Change: <b>{t.qtyChange > 0 ? `+${t.qtyChange}` : t.qtyChange}</b>
+                  </div>
+                </div>
+
+                <div className="mt-1 text-gray-700">
+                  Branch: {t.branch.name} • By: {t.createdBy.name} ({t.createdBy.role})
+                </div>
+
+                <div className="mt-1 text-gray-600">
+                  {formatDateTime(t.createdAt)}
+                  {t.note ? ` • Note: ${t.note}` : ""}
+                </div>
               </div>
             ))}
           </div>
