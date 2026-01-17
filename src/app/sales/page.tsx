@@ -28,8 +28,29 @@ type CartLine = {
   qty: number;
 };
 
+type Invoice = {
+  invoiceNo: string;
+  createdAt: string;
+  total: number;
+  note: string | null;
+  branch: { id: string; name: string };
+  createdBy: { id: string; name: string; role: "MANAGER" | "EMPLOYEE" };
+  items: Array<{
+    qty: number;
+    unitPrice: number;
+    lineTotal: number;
+    product: { id: string; name: string; sku: string; unit: string };
+  }>;
+};
+
 function money(n: number) {
   return `Rs ${Number(n || 0)}`;
+}
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
 }
 
 export default function SalesPage() {
@@ -43,8 +64,10 @@ export default function SalesPage() {
   const [search, setSearch] = useState("");
 
   const [cart, setCart] = useState<CartLine[]>([]);
-
   const [note, setNote] = useState("");
+
+  const [lastInvoice, setLastInvoice] = useState<Invoice | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -78,7 +101,6 @@ export default function SalesPage() {
     const bRes = await api<{ branches: Branch[] }>("/branches");
     setBranches(bRes.branches);
 
-    // Load products once (we filter on the client for speed)
     const pRes = await api<{ products: any[] }>("/products");
     setProducts(
       pRes.products.map((p) => ({
@@ -114,6 +136,7 @@ export default function SalesPage() {
   function addToCart(p: Product) {
     setOk(null);
     setError(null);
+    setLastInvoice(null);
 
     setCart((prev) => {
       const idx = prev.findIndex((x) => x.productId === p.id);
@@ -164,22 +187,25 @@ export default function SalesPage() {
     setOk(null);
 
     try {
-      // call /inventory/sale for each cart item
-      for (const line of cart) {
-        await api("/inventory/sale", {
-          method: "POST",
-          body: JSON.stringify({
-            branchId,
-            productId: line.productId,
-            quantity: Number(line.qty),
-            note: note.trim() ? note.trim() : "Sale",
-          }),
-        });
-      }
+      const payload = {
+        branchId,
+        note: note.trim() ? note.trim() : undefined,
+        items: cart.map((l) => ({
+          productId: l.productId,
+          qty: Number(l.qty),
+          unitPrice: Number(l.price), // lock price at sale time
+        })),
+      };
 
+      const res = await api<{ invoice: Invoice }>("/sales/checkout", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      setLastInvoice(res.invoice);
       setCart([]);
       setNote("");
-      setOk("Sale completed successfully ✅");
+      setOk(`Sale completed: ${res.invoice.invoiceNo} ✅`);
     } catch (e: any) {
       setError(e.message || "Checkout failed");
     } finally {
@@ -187,11 +213,15 @@ export default function SalesPage() {
     }
   }
 
+  function printInvoice() {
+    window.print();
+  }
+
   if (!me) return <main className="rounded bg-white p-6 shadow">Loading...</main>;
 
   return (
     <main className="space-y-6">
-      <div className="flex items-center justify-between rounded bg-white p-6 shadow">
+      <div className="flex items-center justify-between rounded bg-white p-6 shadow print:hidden">
         <h2 className="text-xl font-semibold">Sales</h2>
         <div className="flex gap-2">
           <Link className="rounded border px-3 py-1 text-sm" href="/inventory">
@@ -203,11 +233,63 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {error && <div className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-      {ok && <div className="rounded bg-green-50 p-3 text-sm text-green-700">{ok}</div>}
+      {error && <div className="rounded bg-red-50 p-3 text-sm text-red-700 print:hidden">{error}</div>}
+      {ok && <div className="rounded bg-green-50 p-3 text-sm text-green-700 print:hidden">{ok}</div>}
+
+      {/* Receipt Preview */}
+      {lastInvoice && (
+        <div className="rounded bg-white p-6 shadow">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold">Invoice {lastInvoice.invoiceNo}</h3>
+              <div className="text-sm text-gray-700">
+                Branch: {lastInvoice.branch.name} • Date: {formatDateTime(lastInvoice.createdAt)}
+              </div>
+              <div className="text-sm text-gray-700">
+                By: {lastInvoice.createdBy.name} ({lastInvoice.createdBy.role})
+              </div>
+              {lastInvoice.note ? <div className="text-sm text-gray-700">Note: {lastInvoice.note}</div> : null}
+            </div>
+
+            <div className="print:hidden">
+              <button className="rounded border px-4 py-2 text-sm" onClick={printInvoice}>
+                Print
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded border">
+            <div className="grid grid-cols-12 gap-2 border-b p-3 text-xs font-medium text-gray-600">
+              <div className="col-span-6">Item</div>
+              <div className="col-span-2 text-right">Qty</div>
+              <div className="col-span-2 text-right">Price</div>
+              <div className="col-span-2 text-right">Total</div>
+            </div>
+
+            {lastInvoice.items.map((it, idx) => (
+              <div key={idx} className="grid grid-cols-12 gap-2 border-b p-3 text-sm">
+                <div className="col-span-6">
+                  <div className="font-medium">{it.product.name}</div>
+                  <div className="text-xs text-gray-600">SKU: {it.product.sku}</div>
+                </div>
+                <div className="col-span-2 text-right">
+                  {it.qty} {it.product.unit}
+                </div>
+                <div className="col-span-2 text-right">{money(it.unitPrice)}</div>
+                <div className="col-span-2 text-right">{money(it.lineTotal)}</div>
+              </div>
+            ))}
+
+            <div className="flex items-center justify-between p-3">
+              <span className="text-sm text-gray-700">Grand Total</span>
+              <b className="text-lg">{money(lastInvoice.total)}</b>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top controls */}
-      <div className="grid gap-3 rounded bg-white p-6 shadow md:grid-cols-3">
+      <div className="grid gap-3 rounded bg-white p-6 shadow md:grid-cols-3 print:hidden">
         <div className="space-y-1">
           <label className="text-sm font-medium">Branch</label>
           <select className="w-full rounded border px-3 py-2" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
@@ -231,7 +313,7 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 print:hidden">
         {/* Product picker */}
         <div className="rounded bg-white p-6 shadow">
           <h3 className="mb-3 font-semibold">Products</h3>
@@ -308,7 +390,7 @@ export default function SalesPage() {
                     className="w-full rounded border px-3 py-2"
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder="e.g. Invoice #1001 / Customer name"
+                    placeholder="e.g. Customer name / special note"
                   />
                 </div>
 
@@ -321,7 +403,7 @@ export default function SalesPage() {
                 </button>
 
                 <p className="mt-2 text-xs text-gray-500">
-                  Checkout will reduce stock and create SALE transactions in history.
+                  Checkout creates an invoice (INV-0001) and saves sale history.
                 </p>
               </div>
             </div>
