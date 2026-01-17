@@ -13,24 +13,17 @@ export default function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [mounted, setMounted] = useState(false);
   const [hasToken, setHasToken] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     setHasToken(!!getToken());
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-    setHasToken(!!getToken());
-  }, [mounted, pathname]);
+  }, [pathname]);
 
   const links = useMemo(
     () => [
       { href: "/", label: "Home" },
       { href: "/dashboard", label: "Dashboard" },
-      { href: "/sales", label: "Sales" }, // ✅ user-friendly instead of POS
+      { href: "/sales", label: "Billing" }, // ✅ user-friendly name
       { href: "/products", label: "Products" },
       { href: "/categories", label: "Categories" },
       { href: "/inventory", label: "Inventory" },
@@ -43,7 +36,6 @@ export default function NavBar() {
     clearToken();
     setHasToken(false);
     router.push("/login");
-    router.refresh();
   }
 
   return (
@@ -64,9 +56,7 @@ export default function NavBar() {
       </nav>
 
       <div className="flex items-center gap-2">
-        {!mounted ? (
-          <span className="rounded border px-3 py-1 text-sm text-gray-500">...</span>
-        ) : !hasToken ? (
+        {!hasToken ? (
           <Link className="rounded border px-3 py-1 text-sm" href="/login">
             Login
           </Link>

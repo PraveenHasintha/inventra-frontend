@@ -77,6 +77,7 @@ export default function SalesPage() {
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = products.filter((p) => p.isActive);
+
     if (!q) return list.slice(0, 50);
 
     return list
@@ -101,6 +102,7 @@ export default function SalesPage() {
     const bRes = await api<{ branches: Branch[] }>("/branches");
     setBranches(bRes.branches);
 
+    // Load products once (filter on client for speed)
     const pRes = await api<{ products: any[] }>("/products");
     setProducts(
       pRes.products.map((p) => ({
@@ -161,6 +163,7 @@ export default function SalesPage() {
 
   function setQty(productId: string, qty: number) {
     if (Number.isNaN(qty)) return;
+
     setCart((prev) =>
       prev
         .map((l) => (l.productId === productId ? { ...l, qty: Math.max(0, Math.floor(qty)) } : l))
@@ -205,7 +208,7 @@ export default function SalesPage() {
       setLastInvoice(res.invoice);
       setCart([]);
       setNote("");
-      setOk(`Sale completed: ${res.invoice.invoiceNo} ✅`);
+      setOk(`Saved ✅ Invoice: ${res.invoice.invoiceNo}`);
     } catch (e: any) {
       setError(e.message || "Checkout failed");
     } finally {
@@ -221,8 +224,9 @@ export default function SalesPage() {
 
   return (
     <main className="space-y-6">
+      {/* Header (hidden in print) */}
       <div className="flex items-center justify-between rounded bg-white p-6 shadow print:hidden">
-        <h2 className="text-xl font-semibold">Sales</h2>
+        <h2 className="text-xl font-semibold">Billing</h2>
         <div className="flex gap-2">
           <Link className="rounded border px-3 py-1 text-sm" href="/inventory">
             Inventory
@@ -236,7 +240,7 @@ export default function SalesPage() {
       {error && <div className="rounded bg-red-50 p-3 text-sm text-red-700 print:hidden">{error}</div>}
       {ok && <div className="rounded bg-green-50 p-3 text-sm text-green-700 print:hidden">{ok}</div>}
 
-      {/* Receipt Preview */}
+      {/* Invoice Preview (printable) */}
       {lastInvoice && (
         <div className="rounded bg-white p-6 shadow">
           <div className="flex items-start justify-between gap-3">
@@ -253,7 +257,7 @@ export default function SalesPage() {
 
             <div className="print:hidden">
               <button className="rounded border px-4 py-2 text-sm" onClick={printInvoice}>
-                Print
+                Print Invoice
               </button>
             </div>
           </div>
@@ -288,7 +292,7 @@ export default function SalesPage() {
         </div>
       )}
 
-      {/* Top controls */}
+      {/* Controls (hidden in print) */}
       <div className="grid gap-3 rounded bg-white p-6 shadow md:grid-cols-3 print:hidden">
         <div className="space-y-1">
           <label className="text-sm font-medium">Branch</label>
@@ -309,12 +313,12 @@ export default function SalesPage() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="type to search..."
           />
-          <p className="text-xs text-gray-500">Tip: click a product to add it to the cart.</p>
+          <p className="text-xs text-gray-500">Tip: click a product to add it to the bill.</p>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 print:hidden">
-        {/* Product picker */}
+        {/* Products */}
         <div className="rounded bg-white p-6 shadow">
           <h3 className="mb-3 font-semibold">Products</h3>
 
@@ -342,10 +346,10 @@ export default function SalesPage() {
 
         {/* Cart */}
         <div className="rounded bg-white p-6 shadow">
-          <h3 className="mb-3 font-semibold">Cart</h3>
+          <h3 className="mb-3 font-semibold">Current Bill</h3>
 
           {cart.length === 0 ? (
-            <p className="text-sm text-gray-600">Cart is empty. Add products from the left.</p>
+            <p className="text-sm text-gray-600">No items yet. Add products from the left.</p>
           ) : (
             <div className="space-y-3">
               {cart.map((l) => (
@@ -399,11 +403,11 @@ export default function SalesPage() {
                   className="mt-3 w-full rounded bg-black px-4 py-2 text-white disabled:opacity-60"
                   onClick={checkout}
                 >
-                  {loading ? "Processing..." : "Checkout"}
+                  {loading ? "Saving..." : "Checkout"}
                 </button>
 
                 <p className="mt-2 text-xs text-gray-500">
-                  Checkout creates an invoice (INV-0001) and saves sale history.
+                  Checkout saves the bill and creates an invoice number like <b>INV-000001</b>.
                 </p>
               </div>
             </div>
