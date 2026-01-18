@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * NavBar
+ * Simple words: top navigation links + login/logout button.
+ */
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -23,7 +28,8 @@ export default function NavBar() {
     () => [
       { href: "/", label: "Home" },
       { href: "/dashboard", label: "Dashboard" },
-      { href: "/sales", label: "Billing" }, // ✅ user-friendly name
+      { href: "/sales", label: "Billing" },
+      { href: "/invoices", label: "Invoices" }, // ✅ new
       { href: "/products", label: "Products" },
       { href: "/categories", label: "Categories" },
       { href: "/inventory", label: "Inventory" },
