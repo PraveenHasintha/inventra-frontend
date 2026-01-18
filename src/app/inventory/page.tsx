@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * Inventory Page
+ * Simple words: This screen lets you:
+ * - View current stock
+ * - Manager can Receive / Adjust / Sell / Damage
+ * - View stock history (audit trail) with filter
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -35,7 +43,7 @@ function formatDateTime(iso: string) {
 }
 
 function typeBadge(type: StockTxn["type"]) {
-  // simple text labels, no fancy color to keep consistent with your UI
+  // Simple words: just show type text (no fancy colors)
   switch (type) {
     case "RECEIVE":
       return "RECEIVE";
@@ -93,6 +101,10 @@ export default function InventoryPage() {
   const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches]);
   const activeProducts = useMemo(() => products.filter((p) => p.isActive), [products]);
 
+  /**
+   * loadBase
+   * Simple words: loads logged user, branches, and products for dropdowns.
+   */
   async function loadBase() {
     setError(null);
 
@@ -105,11 +117,16 @@ export default function InventoryPage() {
     const pRes = await api<{ products: any[] }>("/products");
     setProducts(pRes.products.map((p) => ({ id: p.id, name: p.name, sku: p.sku, isActive: p.isActive })));
 
+    // Auto select first branch on first load
     if (!branchId && bRes.branches.length > 0) {
       setBranchId(bRes.branches[0].id);
     }
   }
 
+  /**
+   * loadInventory
+   * Simple words: loads current stock list of selected branch.
+   */
   async function loadInventory(selectedBranchId?: string) {
     const bId = selectedBranchId || branchId;
     if (!bId) return;
@@ -122,6 +139,10 @@ export default function InventoryPage() {
     setItems(inv.items);
   }
 
+  /**
+   * loadHistory
+   * Simple words: loads last 200 stock transactions (optional product filter).
+   */
   async function loadHistory(selectedBranchId?: string) {
     const bId = selectedBranchId || branchId;
     if (!bId) return;
@@ -142,6 +163,25 @@ export default function InventoryPage() {
     }
   }
 
+  /**
+   * runAction
+   * Simple words: runs a stock change action and then refreshes stock + history.
+   */
+  async function runAction(fn: () => Promise<void>) {
+    setLoading(true);
+    setError(null);
+    try {
+      await fn();
+      await loadInventory(branchId);
+      await loadHistory(branchId);
+    } catch (e: any) {
+      setError(e.message || "Action failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // First load: require token
   useEffect(() => {
     const token = getToken();
     if (!token) {
@@ -156,27 +196,13 @@ export default function InventoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // When branch changes: refresh inventory + history
   useEffect(() => {
     if (!branchId) return;
     loadInventory(branchId).catch((e: any) => setError(e.message || "Failed to load inventory"));
-    // auto refresh history for the selected branch too
     loadHistory(branchId).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId]);
-
-  async function runAction(fn: () => Promise<void>) {
-    setLoading(true);
-    setError(null);
-    try {
-      await fn();
-      await loadInventory(branchId);
-      await loadHistory(branchId);
-    } catch (e: any) {
-      setError(e.message || "Action failed");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function onReceive(e: React.FormEvent) {
     e.preventDefault();
@@ -257,6 +283,17 @@ export default function InventoryPage() {
     });
   }
 
+  // Apply button should refresh BOTH stock + history (this is the key fix)
+  async function onApply() {
+    setError(null);
+    try {
+      await loadInventory(branchId);
+      await loadHistory(branchId);
+    } catch (e: any) {
+      setError(e.message || "Failed to apply filters");
+    }
+  }
+
   if (!me) return <main className="rounded bg-white p-6 shadow">Loading...</main>;
 
   return (
@@ -279,7 +316,11 @@ export default function InventoryPage() {
       <div className="grid gap-3 rounded bg-white p-6 shadow md:grid-cols-3">
         <div className="space-y-1">
           <label className="text-sm font-medium">Branch</label>
-          <select className="w-full rounded border px-3 py-2" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+          <select
+            className="w-full rounded border px-3 py-2"
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+          >
             {activeBranches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -299,17 +340,11 @@ export default function InventoryPage() {
         </div>
 
         <div className="md:col-span-3 flex gap-2">
-          <button
-            className="rounded border px-4 py-2 text-sm"
-            onClick={() => loadInventory(branchId).catch((e: any) => setError(e.message || "Failed"))}
-          >
+          <button className="rounded border px-4 py-2 text-sm" onClick={onApply}>
             Apply
           </button>
 
-          <button
-            className="rounded border px-4 py-2 text-sm"
-            onClick={() => loadHistory(branchId).catch(() => {})}
-          >
+          <button className="rounded border px-4 py-2 text-sm" onClick={() => loadHistory(branchId).catch(() => {})}>
             Refresh History
           </button>
         </div>
@@ -360,7 +395,10 @@ export default function InventoryPage() {
               />
             </div>
 
-            <button disabled={loading || !branchId || !receiveProductId} className="rounded bg-black px-4 py-2 text-white disabled:opacity-60">
+            <button
+              disabled={loading || !branchId || !receiveProductId}
+              className="rounded bg-black px-4 py-2 text-white disabled:opacity-60"
+            >
               {loading ? "Saving..." : "Receive"}
             </button>
           </form>
@@ -407,7 +445,10 @@ export default function InventoryPage() {
               />
             </div>
 
-            <button disabled={loading || !branchId || !adjustProductId} className="rounded border px-4 py-2 text-sm disabled:opacity-60">
+            <button
+              disabled={loading || !branchId || !adjustProductId}
+              className="rounded border px-4 py-2 text-sm disabled:opacity-60"
+            >
               {loading ? "Saving..." : "Adjust"}
             </button>
           </form>
@@ -435,7 +476,13 @@ export default function InventoryPage() {
 
             <div className="space-y-1">
               <label className="text-sm font-medium">Quantity (-)</label>
-              <input type="number" min={1} className="w-full rounded border px-3 py-2" value={saleQty} onChange={(e) => setSaleQty(Number(e.target.value))} />
+              <input
+                type="number"
+                min={1}
+                className="w-full rounded border px-3 py-2"
+                value={saleQty}
+                onChange={(e) => setSaleQty(Number(e.target.value))}
+              />
             </div>
 
             <div className="space-y-1">
@@ -448,7 +495,10 @@ export default function InventoryPage() {
               />
             </div>
 
-            <button disabled={loading || !branchId || !saleProductId} className="rounded bg-black px-4 py-2 text-white disabled:opacity-60">
+            <button
+              disabled={loading || !branchId || !saleProductId}
+              className="rounded bg-black px-4 py-2 text-white disabled:opacity-60"
+            >
               {loading ? "Saving..." : "Sell"}
             </button>
           </form>
@@ -476,7 +526,13 @@ export default function InventoryPage() {
 
             <div className="space-y-1">
               <label className="text-sm font-medium">Quantity (-)</label>
-              <input type="number" min={1} className="w-full rounded border px-3 py-2" value={damageQty} onChange={(e) => setDamageQty(Number(e.target.value))} />
+              <input
+                type="number"
+                min={1}
+                className="w-full rounded border px-3 py-2"
+                value={damageQty}
+                onChange={(e) => setDamageQty(Number(e.target.value))}
+              />
             </div>
 
             <div className="space-y-1">
@@ -489,7 +545,10 @@ export default function InventoryPage() {
               />
             </div>
 
-            <button disabled={loading || !branchId || !damageProductId} className="rounded border px-4 py-2 text-sm disabled:opacity-60">
+            <button
+              disabled={loading || !branchId || !damageProductId}
+              className="rounded border px-4 py-2 text-sm disabled:opacity-60"
+            >
               {loading ? "Saving..." : "Mark Damaged"}
             </button>
           </form>
