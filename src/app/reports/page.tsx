@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Reports Page (/reports)
+ * Reports Page
  * Simple words:
- * - Manager can view sales reports
- * - Shows Daily Sales Summary + Top Products
- * - Filter by date range and branch
+ * - Manager can see Low Stock Alerts + Stock Valuation
+ * - Filter by branch
+ * - Change threshold for low stock
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -18,28 +18,34 @@ type Role = "MANAGER" | "EMPLOYEE";
 type Me = { id: string; name: string; email: string; role: Role };
 type Branch = { id: string; name: string; isActive: boolean };
 
-type SalesDay = { day: string; invoiceCount: number; totalSales: number };
-type SalesSummaryRes = {
-  range: { from: string; to: string };
-  summary: { invoiceCount: number; totalSales: number };
-  days: SalesDay[];
+type LowStockItem = {
+  id: string;
+  quantity: number;
+  updatedAt: string;
+  branch: { id: string; name: string };
+  product: { id: string; name: string; sku: string; unit: string; costPrice: number; sellingPrice: number };
 };
 
-type TopProductRow = {
-  product: { id: string; name: string; sku: string; unit: string };
-  qty: number;
-  sales: number;
+type LowStockRes = {
+  threshold: number;
+  count: number;
+  items: LowStockItem[];
 };
-type TopProductsRes = { range: { from: string; to: string }; top: TopProductRow[] };
 
-function todayDateInput() {
-  // YYYY-MM-DD in local time
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
+type ValuationItem = LowStockItem & {
+  costValue: number;
+  sellingValue: number;
+};
+
+type ValuationRes = {
+  count: number;
+  totals: {
+    totalCostValue: number;
+    totalSellingValue: number;
+    estimatedProfitIfSoldAll: number;
+  };
+  items: ValuationItem[];
+};
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -49,25 +55,16 @@ export default function ReportsPage() {
   const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches]);
 
   const [branchId, setBranchId] = useState<string>(""); // empty = all branches
-  const [from, setFrom] = useState<string>(() => {
-    // default: last 7 days
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  });
-  const [to, setTo] = useState<string>(() => todayDateInput());
+  const [threshold, setThreshold] = useState<number>(5);
 
-  const [summary, setSummary] = useState<SalesSummaryRes | null>(null);
-  const [top, setTop] = useState<TopProductsRes | null>(null);
+  const [lowStock, setLowStock] = useState<LowStockRes | null>(null);
+  const [valuation, setValuation] = useState<ValuationRes | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [ok, setOk] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const canView = me?.role === "MANAGER";
+  const isManager = me?.role === "MANAGER";
 
   async function loadBase() {
     const meRes = await api<{ user: Me }>("/auth/me");
@@ -77,28 +74,32 @@ export default function ReportsPage() {
     setBranches(bRes.branches);
   }
 
-  async function loadReports() {
+  async function loadLowStock() {
     const q = new URLSearchParams();
-    if (from) q.set("from", from);
-    if (to) q.set("to", to);
     if (branchId) q.set("branchId", branchId);
+    q.set("threshold", String(threshold));
+    q.set("take", "200");
 
-    const [s, t] = await Promise.all([
-      api<SalesSummaryRes>(`/reports/sales-summary?${q.toString()}`),
-      api<TopProductsRes>(`/reports/top-products?${q.toString()}`),
-    ]);
+    const res = await api<LowStockRes>(`/reports/low-stock?${q.toString()}`);
+    setLowStock(res);
+  }
 
-    setSummary(s);
-    setTop(t);
+  async function loadValuation() {
+    const q = new URLSearchParams();
+    if (branchId) q.set("branchId", branchId);
+    q.set("take", "500");
+
+    const res = await api<ValuationRes>(`/reports/stock-valuation?${q.toString()}`);
+    setValuation(res);
   }
 
   async function refresh() {
     setLoading(true);
-    setError(null);
     setOk(null);
+    setError(null);
     try {
-      await loadReports();
-      setOk("Reports loaded ✅");
+      await Promise.all([loadLowStock(), loadValuation()]);
+      setOk("Loaded ✅");
     } catch (e: any) {
       setError(e.message || "Failed to load reports");
     } finally {
@@ -115,7 +116,7 @@ export default function ReportsPage() {
 
     setLoading(true);
     loadBase()
-      .then(() => loadReports())
+      .then(() => refresh())
       .catch((e: any) => setError(e.message || "Failed to load"))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,12 +124,12 @@ export default function ReportsPage() {
 
   if (!me) return <main className="rounded bg-white p-6 shadow">Loading...</main>;
 
-  if (!canView) {
+  if (!isManager) {
     return (
       <main className="space-y-4">
         <div className="rounded bg-white p-6 shadow">
           <h2 className="text-xl font-semibold">Reports</h2>
-          <p className="mt-2 text-sm text-gray-700">You don’t have permission to view reports.</p>
+          <p className="mt-2 text-sm text-gray-700">Only MANAGER can view reports.</p>
           <div className="mt-4">
             <Link className="rounded border px-3 py-1 text-sm" href="/dashboard">
               Back to Dashboard
@@ -171,86 +172,106 @@ export default function ReportsPage() {
         </div>
 
         <div className="space-y-1">
-          <label className="text-sm font-medium">From</label>
-          <input className="w-full rounded border px-3 py-2" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <label className="text-sm font-medium">Low Stock Threshold</label>
+          <input
+            type="number"
+            min={0}
+            className="w-full rounded border px-3 py-2"
+            value={threshold}
+            onChange={(e) => setThreshold(Number(e.target.value))}
+            placeholder="e.g. 5"
+          />
         </div>
 
-        <div className="space-y-1">
-          <label className="text-sm font-medium">To</label>
-          <input className="w-full rounded border px-3 py-2" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </div>
-
-        <div className="flex items-end">
-          <button className="w-full rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-60" onClick={refresh} disabled={loading}>
+        <div className="flex items-end md:col-span-2">
+          <button
+            className="w-full rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
+            onClick={refresh}
+            disabled={loading}
+          >
             Apply
           </button>
         </div>
       </div>
 
-      {/* Daily summary */}
+      {/* Low Stock */}
       <div className="rounded bg-white p-6 shadow">
-        <h3 className="mb-2 font-semibold">Daily Sales Summary</h3>
+        <h3 className="mb-2 font-semibold">Low Stock Alerts</h3>
 
-        {!summary ? (
+        {!lowStock ? (
           <p className="text-sm text-gray-600">No data</p>
-        ) : (
-          <>
-            <div className="mb-3 text-sm text-gray-700">
-              Total invoices: <b>{summary.summary.invoiceCount}</b> • Total sales: <b>Rs {summary.summary.totalSales}</b>
-            </div>
-
-            {summary.days.length === 0 ? (
-              <p className="text-sm text-gray-600">No invoices in this range.</p>
-            ) : (
-              <div className="space-y-2">
-                {summary.days.map((d) => (
-                  <div key={d.day} className="rounded border p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <b>{d.day}</b>
-                      <div className="text-right">
-                        <div>
-                          Sales: <b>Rs {d.totalSales}</b>
-                        </div>
-                        <div className="text-gray-600">Invoices: {d.invoiceCount}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Top products */}
-      <div className="rounded bg-white p-6 shadow">
-        <h3 className="mb-2 font-semibold">Top Products</h3>
-
-        {!top ? (
-          <p className="text-sm text-gray-600">No data</p>
-        ) : top.top.length === 0 ? (
-          <p className="text-sm text-gray-600">No sales items in this range.</p>
+        ) : lowStock.items.length === 0 ? (
+          <p className="text-sm text-gray-600">No low stock items (threshold: {lowStock.threshold}).</p>
         ) : (
           <div className="space-y-2">
-            {top.top.map((r) => (
-              <div key={r.product.id} className="rounded border p-3 text-sm">
+            {lowStock.items.map((it) => (
+              <div key={it.id} className="rounded border p-3 text-sm">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <b>{r.product.name}</b>
-                    <div className="text-gray-600">SKU: {r.product.sku}</div>
+                    <b>{it.product.name}</b>
+                    <div className="text-gray-600">SKU: {it.product.sku}</div>
                   </div>
                   <div className="text-right">
                     <div>
-                      Sales: <b>Rs {r.sales}</b>
+                      Qty: <b>{it.quantity}</b> {it.product.unit}
                     </div>
-                    <div className="text-gray-600">
-                      Qty: {r.qty} {r.product.unit}
-                    </div>
+                    <div className="text-gray-600">{it.branch.name}</div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* Stock Valuation */}
+      <div className="rounded bg-white p-6 shadow">
+        <h3 className="mb-2 font-semibold">Stock Valuation</h3>
+
+        {!valuation ? (
+          <p className="text-sm text-gray-600">No data</p>
+        ) : (
+          <>
+            <div className="mb-3 grid gap-2 rounded border p-3 text-sm md:grid-cols-3">
+              <div>
+                Total Cost Value: <b>Rs {valuation.totals.totalCostValue}</b>
+              </div>
+              <div>
+                Total Selling Value: <b>Rs {valuation.totals.totalSellingValue}</b>
+              </div>
+              <div>
+                Est. Profit If Sold All: <b>Rs {valuation.totals.estimatedProfitIfSoldAll}</b>
+              </div>
+            </div>
+
+            {valuation.items.length === 0 ? (
+              <p className="text-sm text-gray-600">No stock items to value.</p>
+            ) : (
+              <div className="space-y-2">
+                {valuation.items.slice(0, 50).map((it) => (
+                  <div key={it.id} className="rounded border p-3 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <b>{it.product.name}</b>
+                        <div className="text-gray-600">SKU: {it.product.sku}</div>
+                      </div>
+                      <div className="text-right">
+                        <div>
+                          Qty: <b>{it.quantity}</b> {it.product.unit}
+                        </div>
+                        <div className="text-gray-600">
+                          Cost: Rs {it.costValue} • Sell: Rs {it.sellingValue}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {valuation.items.length > 50 ? (
+                  <p className="text-xs text-gray-500">Showing first 50 items. (Backend returns up to 500)</p>
+                ) : null}
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>

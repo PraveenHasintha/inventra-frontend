@@ -3,9 +3,9 @@
 /**
  * NavBar
  * Simple words:
- * - Shows navigation links
- * - Fetches /auth/me when logged in
- * - Shows manager-only links (Users, Reports)
+ * - Shows links
+ * - If logged in, fetches /auth/me to know role
+ * - Shows Reports only for MANAGER
  */
 
 import Link from "next/link";
@@ -54,9 +54,7 @@ export default function NavBar() {
     ];
 
     if (me?.role === "MANAGER") {
-      // Insert manager tools near invoices/products
       base.splice(4, 0, { href: "/reports", label: "Reports" });
-      base.splice(5, 0, { href: "/users", label: "Users" });
     }
 
     return base;
