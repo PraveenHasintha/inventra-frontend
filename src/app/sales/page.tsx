@@ -1,10 +1,23 @@
 "use client";
 
+/**
+ * Sales Page (Billing)
+ * Simple words:
+ * - Search products + add to cart
+ * - Change qty, remove items
+ * - Checkout -> creates invoice
+ * - Shows invoice preview and print using InvoiceReceipt component
+ *
+ * NOTE: All features from your old file are still here.
+ * The code is smaller because the print UI moved to InvoiceReceipt.tsx.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import InvoiceReceipt, { ReceiptInvoice } from "@/app/components/InvoiceReceipt";
 
 type User = { id: string; name: string; email: string; role: "MANAGER" | "EMPLOYEE" };
 type Branch = { id: string; name: string; isActive: boolean };
@@ -28,29 +41,11 @@ type CartLine = {
   qty: number;
 };
 
-type Invoice = {
-  invoiceNo: string;
-  createdAt: string;
-  total: number;
-  note: string | null;
-  branch: { id: string; name: string };
-  createdBy: { id: string; name: string; role: "MANAGER" | "EMPLOYEE" };
-  items: Array<{
-    qty: number;
-    unitPrice: number;
-    lineTotal: number;
-    product: { id: string; name: string; sku: string; unit: string };
-  }>;
-};
+// Keep backend response compatible (extra fields from backend are fine)
+type Invoice = ReceiptInvoice;
 
 function money(n: number) {
   return `Rs ${Number(n || 0)}`;
-}
-
-function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
 }
 
 export default function SalesPage() {
@@ -208,7 +203,7 @@ export default function SalesPage() {
       setLastInvoice(res.invoice);
       setCart([]);
       setNote("");
-      setOk(`Saved ✅ Invoice: ${res.invoice.invoiceNo}`);
+      setOk(`Saved ✅ Invoice: ${res.invoice.invoiceNo || ""}`);
     } catch (e: any) {
       setError(e.message || "Checkout failed");
     } finally {
@@ -242,53 +237,14 @@ export default function SalesPage() {
 
       {/* Invoice Preview (printable) */}
       {lastInvoice && (
-        <div className="rounded bg-white p-6 shadow">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold">Invoice {lastInvoice.invoiceNo}</h3>
-              <div className="text-sm text-gray-700">
-                Branch: {lastInvoice.branch.name} • Date: {formatDateTime(lastInvoice.createdAt)}
-              </div>
-              <div className="text-sm text-gray-700">
-                By: {lastInvoice.createdBy.name} ({lastInvoice.createdBy.role})
-              </div>
-              {lastInvoice.note ? <div className="text-sm text-gray-700">Note: {lastInvoice.note}</div> : null}
-            </div>
-
-            <div className="print:hidden">
-              <button className="rounded border px-4 py-2 text-sm" onClick={printInvoice}>
-                Print Invoice
-              </button>
-            </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-end print:hidden">
+            <button className="rounded border px-4 py-2 text-sm" onClick={printInvoice}>
+              Print Invoice
+            </button>
           </div>
 
-          <div className="mt-4 rounded border">
-            <div className="grid grid-cols-12 gap-2 border-b p-3 text-xs font-medium text-gray-600">
-              <div className="col-span-6">Item</div>
-              <div className="col-span-2 text-right">Qty</div>
-              <div className="col-span-2 text-right">Price</div>
-              <div className="col-span-2 text-right">Total</div>
-            </div>
-
-            {lastInvoice.items.map((it, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-2 border-b p-3 text-sm">
-                <div className="col-span-6">
-                  <div className="font-medium">{it.product.name}</div>
-                  <div className="text-xs text-gray-600">SKU: {it.product.sku}</div>
-                </div>
-                <div className="col-span-2 text-right">
-                  {it.qty} {it.product.unit}
-                </div>
-                <div className="col-span-2 text-right">{money(it.unitPrice)}</div>
-                <div className="col-span-2 text-right">{money(it.lineTotal)}</div>
-              </div>
-            ))}
-
-            <div className="flex items-center justify-between p-3">
-              <span className="text-sm text-gray-700">Grand Total</span>
-              <b className="text-lg">{money(lastInvoice.total)}</b>
-            </div>
-          </div>
+          <InvoiceReceipt invoice={lastInvoice} />
         </div>
       )}
 
@@ -296,7 +252,11 @@ export default function SalesPage() {
       <div className="grid gap-3 rounded bg-white p-6 shadow md:grid-cols-3 print:hidden">
         <div className="space-y-1">
           <label className="text-sm font-medium">Branch</label>
-          <select className="w-full rounded border px-3 py-2" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+          <select
+            className="w-full rounded border px-3 py-2"
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+          >
             {activeBranches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -356,7 +316,10 @@ export default function SalesPage() {
                 <div key={l.productId} className="rounded border p-3 text-sm">
                   <div className="flex items-center justify-between">
                     <b>{l.name}</b>
-                    <button className="rounded border px-2 py-1 text-xs" onClick={() => removeLine(l.productId)}>
+                    <button
+                      className="rounded border px-2 py-1 text-xs"
+                      onClick={() => removeLine(l.productId)}
+                    >
                       Remove
                     </button>
                   </div>
