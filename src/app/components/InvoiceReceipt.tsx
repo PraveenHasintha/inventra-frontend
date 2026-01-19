@@ -3,7 +3,7 @@
 /**
  * InvoiceReceipt
  * Simple words: This is the printable receipt UI.
- * We reuse it in Billing and Invoice History so print layout stays the same everywhere.
+ * We reuse it in Billing and Invoice Reprint so print layout stays the same everywhere.
  */
 
 export type ReceiptInvoice = {
@@ -12,7 +12,7 @@ export type ReceiptInvoice = {
   total: number;
   note: string | null;
 
-  // Keep address/phone optional so it works even if backend doesn't send them yet
+  // address/phone optional so it works even if some responses don't include them
   branch: { name: string; address?: string | null; phone?: string | null };
 
   createdBy: { name: string; role: "MANAGER" | "EMPLOYEE" };
@@ -47,7 +47,7 @@ export default function InvoiceReceipt({ invoice }: { invoice: ReceiptInvoice })
 
       <hr className="my-4" />
 
-      {/* Meta */}
+      {/* Invoice meta */}
       <div className="flex flex-wrap justify-between gap-2 text-sm">
         <div>
           <div>
@@ -64,6 +64,7 @@ export default function InvoiceReceipt({ invoice }: { invoice: ReceiptInvoice })
         </div>
       </div>
 
+      {/* Note */}
       {invoice.note ? (
         <div className="mt-3 text-sm">
           Note: <span className="text-gray-700">{invoice.note}</span>
@@ -85,6 +86,7 @@ export default function InvoiceReceipt({ invoice }: { invoice: ReceiptInvoice })
                   {it.product.sku} • {it.qty} {it.product.unit} x {money(it.unitPrice)}
                 </div>
               </div>
+
               <div className="shrink-0 font-semibold">{money(it.lineTotal)}</div>
             </div>
           ))}

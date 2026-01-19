@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Invoice Details Page (/invoices/details?publicId=...)
+ * Invoice Details Page
  * Simple words:
- * - Opens a single invoice with items
- * - Uses shared InvoiceReceipt component
- * - Print button prints the receipt
+ * - Opens a single invoice fully (items included)
+ * - Uses InvoiceReceipt component for consistent printing
+ * - Print button triggers browser print
  */
 
 import { useEffect, useState } from "react";

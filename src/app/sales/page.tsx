@@ -6,10 +6,11 @@
  * - Search products + add to cart
  * - Change qty, remove items
  * - Checkout -> creates invoice
- * - Shows invoice preview and print using InvoiceReceipt component
+ * - Shows invoice preview using InvoiceReceipt
+ * - Print button prints the receipt
  *
- * NOTE: All features from your old file are still here.
- * The code is smaller because the print UI moved to InvoiceReceipt.tsx.
+ * All your old functionalities are kept.
+ * The file is smaller only because print UI moved into InvoiceReceipt component.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -41,7 +42,7 @@ type CartLine = {
   qty: number;
 };
 
-// Keep backend response compatible (extra fields from backend are fine)
+// Invoice response used for receipt printing
 type Invoice = ReceiptInvoice;
 
 function money(n: number) {
@@ -97,7 +98,6 @@ export default function SalesPage() {
     const bRes = await api<{ branches: Branch[] }>("/branches");
     setBranches(bRes.branches);
 
-    // Load products once (filter on client for speed)
     const pRes = await api<{ products: any[] }>("/products");
     setProducts(
       pRes.products.map((p) => ({
@@ -191,7 +191,7 @@ export default function SalesPage() {
         items: cart.map((l) => ({
           productId: l.productId,
           qty: Number(l.qty),
-          unitPrice: Number(l.price), // lock price at sale time
+          unitPrice: Number(l.price),
         })),
       };
 
