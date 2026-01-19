@@ -2,45 +2,69 @@
 
 /**
  * NavBar
- * Simple words: top navigation links + login/logout button.
+ * Simple words:
+ * - Shows top navigation links
+ * - Shows Login/Logout
+ * - Shows "Users" link only for MANAGER (so employees don't see it)
  */
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { clearToken, getToken } from "@/lib/auth";
+import { api } from "@/lib/api";
 
 function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
 }
+
+type Me = { id: string; name: string; email: string; role: "MANAGER" | "EMPLOYEE" };
 
 export default function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
 
   const [hasToken, setHasToken] = useState(false);
+  const [me, setMe] = useState<Me | null>(null);
 
   useEffect(() => {
-    setHasToken(!!getToken());
+    const token = getToken();
+    setHasToken(!!token);
+
+    if (!token) {
+      setMe(null);
+      return;
+    }
+
+    api<{ user: Me }>("/auth/me")
+      .then((res) => setMe(res.user))
+      .catch(() => setMe(null));
   }, [pathname]);
 
-  const links = useMemo(
-    () => [
+  const links = useMemo(() => {
+    const base = [
       { href: "/", label: "Home" },
       { href: "/dashboard", label: "Dashboard" },
       { href: "/sales", label: "Billing" },
-      { href: "/invoices", label: "Invoices" }, // ✅ new
+      { href: "/invoices", label: "Invoices" },
       { href: "/products", label: "Products" },
       { href: "/categories", label: "Categories" },
       { href: "/inventory", label: "Inventory" },
       { href: "/branches", label: "Branches" },
-    ],
-    []
-  );
+    ];
+
+    // Only managers see User Management
+    if (me?.role === "MANAGER") {
+      base.splice(4, 0, { href: "/users", label: "Users" }); // insert near invoices/products
+    }
+
+    return base;
+  }, [me?.role]);
 
   function onLogout() {
     clearToken();
     setHasToken(false);
+    setMe(null);
     router.push("/login");
   }
 
