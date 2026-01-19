@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * NavBar
+ * inventra-frontend/src/app/components/NavBar.tsx
  * Simple words:
- * - Shows links
- * - If logged in, fetches /auth/me to know role
- * - Shows Reports only for MANAGER
+ * - Top navigation links
+ * - If logged in, we call /auth/me to know role
+ * - Show manager-only links: Reports + Users
  */
 
 import Link from "next/link";
@@ -53,8 +53,10 @@ export default function NavBar() {
       { href: "/branches", label: "Branches" },
     ];
 
+    // Manager-only pages
     if (me?.role === "MANAGER") {
       base.splice(4, 0, { href: "/reports", label: "Reports" });
+      base.splice(5, 0, { href: "/users", label: "Users" });
     }
 
     return base;
@@ -90,7 +92,7 @@ export default function NavBar() {
             Login
           </Link>
         ) : (
-          <button className="rounded border px-3 py-1 text-sm" onClick={onLogout}>
+          <button className="rounded border px-3 py-1 text-sm" onClick={onLogout} type="button">
             Logout
           </button>
         )}

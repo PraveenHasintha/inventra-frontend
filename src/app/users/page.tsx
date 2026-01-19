@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Users Page (/users)
+ * inventra-frontend/src/app/users/page.tsx
  * Simple words:
  * - Manager can create employees/managers
  * - Manager can activate/deactivate users
@@ -16,7 +16,6 @@ import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 
 type Role = "MANAGER" | "EMPLOYEE";
-
 type Me = { id: string; name: string; email: string; role: Role };
 
 type UserRow = {
@@ -195,7 +194,7 @@ export default function UsersPage() {
       <div className="flex items-center justify-between rounded bg-white p-6 shadow">
         <h2 className="text-xl font-semibold">User Management</h2>
         <div className="flex gap-2">
-          <button className="rounded border px-3 py-1 text-sm" onClick={() => refresh()} disabled={loading}>
+          <button className="rounded border px-3 py-1 text-sm" onClick={() => refresh()} disabled={loading} type="button">
             {loading ? "Loading..." : "Refresh"}
           </button>
           <Link className="rounded border px-3 py-1 text-sm" href="/dashboard">
@@ -252,7 +251,12 @@ export default function UsersPage() {
       <div className="grid gap-3 rounded bg-white p-6 shadow md:grid-cols-3">
         <div className="space-y-1 md:col-span-2">
           <label className="text-sm font-medium">Search (name/email)</label>
-          <input className="w-full rounded border px-3 py-2" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="type and press Apply" />
+          <input
+            className="w-full rounded border px-3 py-2"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="type and press Apply"
+          />
         </div>
 
         <div className="space-y-1">
@@ -265,7 +269,7 @@ export default function UsersPage() {
         </div>
 
         <div className="md:col-span-3">
-          <button className="rounded border px-4 py-2 text-sm" onClick={() => refresh()} disabled={loading}>
+          <button className="rounded border px-4 py-2 text-sm" onClick={() => refresh()} disabled={loading} type="button">
             {loading ? "Loading..." : "Apply"}
           </button>
         </div>
@@ -322,6 +326,7 @@ export default function UsersPage() {
                       onClick={() => updateUser(u.id, { isActive: !u.isActive })}
                       disabled={loading || u.id === me.id}
                       title={u.id === me.id ? "You cannot deactivate your own account" : ""}
+                      type="button"
                     >
                       {u.isActive ? "Deactivate" : "Activate"}
                     </button>
@@ -338,14 +343,21 @@ export default function UsersPage() {
                         onChange={(e) => setResetPwd((prev) => ({ ...prev, [u.id]: e.target.value }))}
                         disabled={loading}
                       />
-                      <button className="rounded bg-black px-3 py-2 text-sm text-white" onClick={() => doResetPassword(u.id)} disabled={loading}>
+                      <button
+                        className="rounded bg-black px-3 py-2 text-sm text-white"
+                        onClick={() => doResetPassword(u.id)}
+                        disabled={loading}
+                        type="button"
+                      >
                         Reset
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {u.id === me.id ? <div className="mt-2 text-xs text-gray-500">Note: your own account cannot be deactivated or role-changed.</div> : null}
+                {u.id === me.id ? (
+                  <div className="mt-2 text-xs text-gray-500">Note: your own account cannot be deactivated or role-changed.</div>
+                ) : null}
               </div>
             ))}
           </div>
