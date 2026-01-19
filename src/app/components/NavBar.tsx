@@ -3,9 +3,9 @@
 /**
  * NavBar
  * Simple words:
- * - Shows top navigation links
- * - Shows Login/Logout
- * - Shows "Users" link only for MANAGER (so employees don't see it)
+ * - Shows navigation links
+ * - Fetches /auth/me when logged in
+ * - Shows manager-only links (Users, Reports)
  */
 
 import Link from "next/link";
@@ -53,9 +53,10 @@ export default function NavBar() {
       { href: "/branches", label: "Branches" },
     ];
 
-    // Only managers see User Management
     if (me?.role === "MANAGER") {
-      base.splice(4, 0, { href: "/users", label: "Users" }); // insert near invoices/products
+      // Insert manager tools near invoices/products
+      base.splice(4, 0, { href: "/reports", label: "Reports" });
+      base.splice(5, 0, { href: "/users", label: "Users" });
     }
 
     return base;
